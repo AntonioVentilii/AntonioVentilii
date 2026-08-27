@@ -1,24 +1,30 @@
 # Hi, I'm AV
 
-![](https://github-profile-summary-cards.vercel.app/api/cards/profile-details?username=AntonioVentilii&theme=nord_dark)
+![Profile details](assets/profile-details.svg)
 
 <table>
   <tr>
     <td>
-      <img src="https://github-profile-summary-cards.vercel.app/api/cards/stats?username=AntonioVentilii&theme=nord_dark" />
+      <img src="assets/stats.svg" alt="Stats" />
     </td>
     <td>
-      <img src="https://github-profile-summary-cards.vercel.app/api/cards/repos-per-language?username=AntonioVentilii&theme=nord_dark" />
+      <img src="assets/repos-per-language.svg" alt="Top languages by repo" />
     </td>
   </tr>
   <tr>
     <td>
-      <img src="https://github-profile-summary-cards.vercel.app/api/cards/most-commit-language?username=AntonioVentilii&theme=nord_dark" />
+      <img src="assets/most-commit-language.svg" alt="Most commits by language" />
     </td>
     <td>
-      <img src="https://github-profile-summary-cards.vercel.app/api/cards/productive-time?username=AntonioVentilii&theme=nord_dark&utcOffset=1" />
+      <img src="assets/productive-time.svg" alt="Productive time" />
     </td>
   </tr>
 </table>
 
-[![GitHub Streak](https://streak-stats.demolab.com?user=AntonioVentilii&theme=nord&hide_border=true)](https://git.io/streak-stats)
+[![GitHub Streak](assets/streak.svg)](https://git.io/streak-stats)
+
+<!--
+  Cards are pre-rendered into assets/ by .github/workflows/refresh-cards.yml (daily).
+  Generating them on page load meant GitHub's camo proxy timed out (~4s) against the
+  slow upstream generators, so most cards rendered as broken images.
+-->

@@ -1,0 +1,120 @@
+name: Refresh profile cards
+
+on:
+  schedule:
+    # Every day at 04:17 UTC. Off-peak so the upstream generators are less loaded.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/refresh-cards.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-cards
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fetch cards
+        run: |
+          set -uo pipefail
+
+          CARDS="https://github-profile-summary-cards.vercel.app/api/cards"
+          USER=AntonioVentilii
+          THEME=nord_dark
+
+          # name|url
+          TARGETS=(
+            "profile-details|$CARDS/profile-details?username=$USER&theme=$THEME"
+            "stats|$CARDS/stats?username=$USER&theme=$THEME"
+            "repos-per-language|$CARDS/repos-per-language?username=$USER&theme=$THEME"
+            "most-commit-language|$CARDS/most-commit-language?username=$USER&theme=$THEME"
+            "productive-time|$CARDS/productive-time?username=$USER&theme=$THEME&utcOffset=1"
+            "streak|https://streak-stats.demolab.com?user=$USER&theme=nord&hide_border=true"
+          )
+
+          failed=0
+
+          for target in "${TARGETS[@]}"; do
+            name="${target%%|*}"
+            url="${target#*|}"
+            dest="assets/$name.svg"
+            tmp="$(mktemp)"
+
+            ok=0
+            for attempt in 1 2 3; do
+              code=$(curl -sS -o "$tmp" -w '%{http_code}' \
+                --max-time 45 --connect-timeout 15 \
+                -H 'User-Agent: refresh-cards (github-actions)' \
+                "$url" || true)
+
+              # Only accept a real, non-trivial SVG. A 200 that is an error page
+              # or a stub must never overwrite a good committed card.
+              if [ "$code" = "200" ] \
+                 && head -c 512 "$tmp" | grep -qi '<svg' \
+                 && [ "$(wc -c < "$tmp")" -gt 500 ]; then
+                ok=1
+                break
+              fi
+
+              echo "::warning::$name attempt $attempt failed (http=$code, bytes=$(wc -c < "$tmp"))"
+              sleep $((attempt * 10))
+            done
+
+            if [ "$ok" = "1" ]; then
+              mv "$tmp" "$dest"
+              echo "ok: $name ($(wc -c < "$dest") bytes)"
+            else
+              rm -f "$tmp"
+              failed=$((failed + 1))
+              if [ -f "$dest" ]; then
+                echo "::warning::$name unavailable - keeping previously committed card"
+              else
+                echo "::error::$name unavailable and no committed card exists yet"
+              fi
+            fi
+          done
+
+          echo "failed_count=$failed" >> "$GITHUB_ENV"
+
+          # Fail only if we have nothing at all to show.
+          if [ "$(ls -1 assets/*.svg 2>/dev/null | wc -l)" -eq 0 ]; then
+            echo "::error::no cards could be fetched"
+            exit 1
+          fi
+
+      - name: Commit updated cards
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add assets
+          if git diff --cached --quiet; then
+            echo "No changes."
+            exit 0
+          fi
+          git commit -m "Refresh profile cards ($(date -u +%Y-%m-%d))"
+
+          # main may have moved since checkout (this job only touches assets/,
+          # so rebasing onto whatever landed is always safe).
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "pushed"
+              exit 0
+            fi
+            echo "::warning::push rejected, rebasing onto origin/main (attempt $attempt)"
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort || true; }
+            sleep $((attempt * 5))
+          done
+
+          echo "::error::could not push after 3 attempts"
+          exit 1
