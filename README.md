@@ -1,5 +1,7 @@
 # Hi, I'm AV
 
+[![Antonio Ventilii — AI-Native Senior Software Engineer](assets/terminal-banner.jpg)](https://ventilii.dev)
+
 ![Profile details](assets/profile-details.svg)
 
 <table>
