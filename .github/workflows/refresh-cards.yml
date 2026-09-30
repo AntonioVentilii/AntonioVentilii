@@ -32,8 +32,10 @@ jobs:
           THEME=nord_dark
 
           # name|url
+          # profile-details: the default title "login (name)" is clamped to 22
+          # chars ("AntonioVentilii (Ant…)"); `name` overrides the whole title.
           TARGETS=(
-            "profile-details|$CARDS/profile-details?username=$USER&theme=$THEME"
+            "profile-details|$CARDS/profile-details?username=$USER&theme=$THEME&name=Antonio%20Ventilii"
             "stats|$CARDS/stats?username=$USER&theme=$THEME"
             "repos-per-language|$CARDS/repos-per-language?username=$USER&theme=$THEME"
             "most-commit-language|$CARDS/most-commit-language?username=$USER&theme=$THEME"
