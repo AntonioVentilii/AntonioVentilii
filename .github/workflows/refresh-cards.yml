@@ -23,6 +23,23 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Fallback source: render the same cards here with this repo's own token.
+      # The hosted generator shares one token pool across all its users and
+      # answers "temporarily unavailable" whenever that pool is rate limited
+      # (productive-time is the usual casualty). Output lands in
+      # profile-summary-card-output/ and is never committed.
+      - name: Generate fallback cards
+        continue-on-error: true
+        uses: vn7n24fzkq/github-profile-summary-cards@v0.12.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          USERNAME: AntonioVentilii
+          THEME: nord_dark
+          UTC_OFFSET: 1
+          NAME: Antonio Ventilii
+          AUTO_PUSH: false
+
       - name: Fetch cards
         run: |
           set -uo pipefail
@@ -31,23 +48,36 @@ jobs:
           USER=AntonioVentilii
           THEME=nord_dark
 
-          # name|url
+          LOCAL=profile-summary-card-output/$THEME
+
+          # name|fallback file (from the step above, empty = none)|url
           # profile-details: the default title "login (name)" is clamped to 22
           # chars ("AntonioVentilii (Ant…)"); `name` overrides the whole title.
           TARGETS=(
-            "profile-details|$CARDS/profile-details?username=$USER&theme=$THEME&name=Antonio%20Ventilii"
-            "stats|$CARDS/stats?username=$USER&theme=$THEME"
-            "repos-per-language|$CARDS/repos-per-language?username=$USER&theme=$THEME"
-            "most-commit-language|$CARDS/most-commit-language?username=$USER&theme=$THEME"
-            "productive-time|$CARDS/productive-time?username=$USER&theme=$THEME&utcOffset=1"
-            "streak|https://streak-stats.demolab.com?user=$USER&theme=nord&hide_border=true"
+            "profile-details|$LOCAL/0-profile-details.svg|$CARDS/profile-details?username=$USER&theme=$THEME&name=Antonio%20Ventilii"
+            "stats|$LOCAL/3-stats.svg|$CARDS/stats?username=$USER&theme=$THEME"
+            "repos-per-language|$LOCAL/1-repos-per-language.svg|$CARDS/repos-per-language?username=$USER&theme=$THEME"
+            "most-commit-language|$LOCAL/2-most-commit-language.svg|$CARDS/most-commit-language?username=$USER&theme=$THEME"
+            "productive-time|$LOCAL/4-productive-time.svg|$CARDS/productive-time?username=$USER&theme=$THEME&utcOffset=1"
+            "streak||https://streak-stats.demolab.com?user=$USER&theme=nord&hide_border=true"
           )
+
+          # Only accept a real, non-trivial SVG. A 200 that is an error page
+          # or a stub must never overwrite a good committed card.
+          # github-profile-summary-cards answers overload with a 200 + a
+          # valid ~700-byte "ERROR!!! temporarily unavailable" SVG, so the
+          # size check alone is not enough - reject known error markers too.
+          good_svg() {
+            [ -f "$1" ] \
+              && head -c 512 "$1" | grep -qi '<svg' \
+              && [ "$(wc -c < "$1")" -gt 500 ] \
+              && ! grep -qiE 'ERROR!!!|temporarily unavailable|something went wrong' "$1"
+          }
 
           failed=0
 
           for target in "${TARGETS[@]}"; do
-            name="${target%%|*}"
-            url="${target#*|}"
+            IFS='|' read -r name fallback url <<< "$target"
             dest="assets/$name.svg"
             tmp="$(mktemp)"
 
@@ -58,15 +88,7 @@ jobs:
                 -H 'User-Agent: refresh-cards (github-actions)' \
                 "$url" || true)
 
-              # Only accept a real, non-trivial SVG. A 200 that is an error page
-              # or a stub must never overwrite a good committed card.
-              # github-profile-summary-cards answers overload with a 200 + a
-              # valid ~700-byte "ERROR!!! temporarily unavailable" SVG, so the
-              # size check alone is not enough - reject known error markers too.
-              if [ "$code" = "200" ] \
-                 && head -c 512 "$tmp" | grep -qi '<svg' \
-                 && [ "$(wc -c < "$tmp")" -gt 500 ] \
-                 && ! grep -qiE 'ERROR!!!|temporarily unavailable|something went wrong' "$tmp"; then
+              if [ "$code" = "200" ] && good_svg "$tmp"; then
                 ok=1
                 break
               fi
@@ -78,6 +100,10 @@ jobs:
             if [ "$ok" = "1" ]; then
               mv "$tmp" "$dest"
               echo "ok: $name ($(wc -c < "$dest") bytes)"
+            elif [ -n "$fallback" ] && good_svg "$fallback"; then
+              rm -f "$tmp"
+              cp "$fallback" "$dest"
+              echo "::notice::$name: hosted generator unavailable - used self-generated card ($(wc -c < "$dest") bytes)"
             else
               rm -f "$tmp"
               failed=$((failed + 1))
