@@ -58,9 +58,13 @@ jobs:
 
               # Only accept a real, non-trivial SVG. A 200 that is an error page
               # or a stub must never overwrite a good committed card.
+              # github-profile-summary-cards answers overload with a 200 + a
+              # valid ~700-byte "ERROR!!! temporarily unavailable" SVG, so the
+              # size check alone is not enough - reject known error markers too.
               if [ "$code" = "200" ] \
                  && head -c 512 "$tmp" | grep -qi '<svg' \
-                 && [ "$(wc -c < "$tmp")" -gt 500 ]; then
+                 && [ "$(wc -c < "$tmp")" -gt 500 ] \
+                 && ! grep -qiE 'ERROR!!!|temporarily unavailable|something went wrong' "$tmp"; then
                 ok=1
                 break
               fi
